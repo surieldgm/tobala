@@ -1,0 +1,22 @@
+services:
+  db:
+    build:
+      context: ./packages/django-agave
+      dockerfile: Dockerfile.pg
+    container_name: tobala-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tobala}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tobala_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-tobala}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tobala} -d ${POSTGRES_DB:-tobala}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
