@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDeleteNote, useUpdateNote } from "@/hooks/useNotes";
-import { CAT_META, EDGE_META, F, C, S } from "@/lib/design";
+import { CAT_META, F, C, S } from "@/lib/design";
 import { CatDropdown } from "@/components/CatDropdown";
 import { EdgeCreator } from "@/components/EdgeCreator";
-import { useNeighbors, useDeleteLink } from "@/hooks/useEdges";
-import { useSuggestions } from "@/hooks/useEdges";
-import { useCreateLink } from "@/hooks/useEdges";
-import type { Category, EdgeLabel, Note, NoteLink } from "@/lib/types";
+import { useNeighbors, useSuggestions, useCreateLink } from "@/hooks/useEdges";
+import type { Category, Note } from "@/lib/types";
 
+/* ── Icons ── */
 const LinkIcon = () => (
   <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
     <path d="M4.5 6.5a2 2 0 003 0l1.2-1.2A2 2 0 005.9 2.2L5 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
@@ -29,10 +28,19 @@ const SparkIcon = () => (
   </svg>
 );
 
+/* ── Helpers ── */
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-    + " at " + new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return (
+    new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) +
+    " at " +
+    new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  );
 }
+
+type SaveState = "saved" | "pending" | "saving" | "error";
+
+/* ── Auto-save delay ── */
+const DEBOUNCE_MS = 800;
 
 interface Props {
   note: Note;
@@ -44,42 +52,99 @@ export function NoteEditor({ note, allNotes }: Props) {
   const titleRef = useRef<HTMLInputElement | null>(null);
   const update = useUpdateNote(note.id);
   const del = useDeleteNote();
-  const deleteLink = useDeleteLink();
   const createLink = useCreateLink();
-
   const neighbors = useNeighbors(note.id, 1);
   const suggestions = useSuggestions(note.id, 4);
 
+  /* ── Local state ── */
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const [category, setCategory] = useState<Category>(note.category);
+  const [localEdited, setLocalEdited] = useState(note.edited); // updates on each keystroke
+  const [saveState, setSaveState] = useState<SaveState>("saved");
 
+  // Keep refs to always-fresh values so debounced flush sees latest content
+  const latestTitle = useRef(title);
+  const latestBody = useRef(body);
+  const latestCategory = useRef(category);
+  latestTitle.current = title;
+  latestBody.current = body;
+  latestCategory.current = category;
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Sync when navigating to a different note */
   useEffect(() => {
     setTitle(note.title);
     setBody(note.body);
     setCategory(note.category);
-  }, [note.id, note.title, note.body, note.category]);
+    setLocalEdited(note.edited);
+    setSaveState("saved");
+  }, [note.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // focus title on new (empty title) note
+  /* Auto-focus title on brand-new (empty) note */
   useEffect(() => {
     if (!note.title) titleRef.current?.focus();
   }, [note.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Flush pending changes to the server */
+  const flush = useCallback(() => {
+    setSaveState("saving");
+    update.mutate(
+      { title: latestTitle.current, body: latestBody.current, category: latestCategory.current },
+      {
+        onSuccess: () => setSaveState("saved"),
+        onError: () => setSaveState("error"),
+      }
+    );
+  }, [update]);
+
+  /* Schedule a debounced save and update the local timestamp immediately */
+  const scheduleAutoSave = useCallback(() => {
+    setLocalEdited(new Date().toISOString()); // real-time timestamp update
+    setSaveState("pending");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flush, DEBOUNCE_MS);
+  }, [flush]);
+
+  /* Flush on unmount if changes are still pending */
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        if (saveState === "pending") flush();
+      }
+    };
+  }, [flush, saveState]);
+
   const cat = CAT_META[category] ?? CAT_META.random;
-
   const neighborIds = new Set((neighbors.data ?? []).map(n => n.id));
-  const outEdges = (neighbors.data ?? [])
-    .map(n => {
-      // match back to edge metadata — we only have flat neighbor list, so we display them
-      return { note: n };
-    });
 
-  const dirty = title !== note.title || body !== note.body || category !== note.category;
+  /* Category changes save immediately (no debounce needed for a select) */
+  const handleCategoryChange = (c: Category) => {
+    setCategory(c);
+    latestCategory.current = c;
+    setLocalEdited(new Date().toISOString());
+    update.mutate(
+      { title: latestTitle.current, body: latestBody.current, category: c },
+      { onSuccess: () => setSaveState("saved"), onError: () => setSaveState("error") }
+    );
+  };
 
-  const save = () => update.mutate({ title, body, category });
+  const saveLabel =
+    saveState === "saving"  ? "Saving…"  :
+    saveState === "pending" ? "Unsaved…" :
+    saveState === "error"   ? "Error ✕"  :
+                              "Saved ✓";
+
+  const saveLabelColor =
+    saveState === "error"   ? "#C45B4A" :
+    saveState === "saved"   ? "#6B9A5B" :
+                              C.text3;
 
   return (
     <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+
       {/* ── Editor pane ── */}
       <div style={{
         flex: 1, margin: 14, marginRight: 0,
@@ -88,26 +153,29 @@ export function NoteEditor({ note, allNotes }: Props) {
         background: cat.bg,
         display: "flex", flexDirection: "column", overflow: "auto",
       }}>
-        {/* Topbar */}
+        {/* Top bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <CatDropdown
-              value={category}
-              onChange={c => { setCategory(c); update.mutate({ title, body, category: c }); }}
-            />
+            <CatDropdown value={category} onChange={handleCategoryChange} />
             <span style={{ fontFamily: F.mono, fontSize: 11, color: C.text3, opacity: .45 }}>
               #{note.id}
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Dynamic "Last edited" — updates immediately on every keystroke */}
             <span style={{ fontFamily: F.mono, fontSize: 10, color: C.text3, opacity: .5 }}>
-              Last edited: {fmtTime(note.edited)}
+              Last edited: {fmtTime(localEdited)}
             </span>
+            {/* Auto-save status badge */}
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: saveLabelColor, opacity: .85 }}>
+              {saveLabel}
+            </span>
+            {/* Close → back to notes list */}
             <button
               type="button"
               onClick={() => router.push("/notes")}
               style={S.iconBtn}
-              title="Close"
+              title="Back to notes"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -116,21 +184,24 @@ export function NoteEditor({ note, allNotes }: Props) {
           </div>
         </div>
 
+        {/* Title */}
         <input
           ref={titleRef}
           placeholder="Note Title"
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={e => { setTitle(e.target.value); scheduleAutoSave(); }}
           style={{
             border: "none", background: "transparent",
             fontFamily: F.serif, fontSize: 21, fontWeight: 700, color: C.text,
             outline: "none", marginBottom: 8, width: "100%",
           }}
         />
+
+        {/* Body */}
         <textarea
           placeholder="Pour your heart out…"
           value={body}
-          onChange={e => setBody(e.target.value)}
+          onChange={e => { setBody(e.target.value); scheduleAutoSave(); }}
           style={{
             border: "none", background: "transparent",
             fontFamily: F.serif, fontSize: 14, color: C.text,
@@ -138,21 +209,12 @@ export function NoteEditor({ note, allNotes }: Props) {
           }}
         />
 
-        {/* Footer bar */}
-        <div style={{ display: "flex", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(139,115,85,.12)" }}>
-          <button
-            type="button"
-            disabled={!dirty || update.isPending}
-            onClick={save}
-            style={{ ...S.smallBtn, opacity: !dirty || update.isPending ? .5 : 1 }}
-          >
-            {update.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
-          </button>
-          <EdgeCreator
-            sourceId={note.id}
-            notes={allNotes}
-            existingTargetIds={neighborIds}
-          />
+        {/* Footer */}
+        <div style={{
+          display: "flex", gap: 6, marginTop: 8, paddingTop: 8,
+          borderTop: "1px solid rgba(139,115,85,.12)",
+        }}>
+          <EdgeCreator sourceId={note.id} notes={allNotes} existingTargetIds={neighborIds} />
           <button
             type="button"
             onClick={() => {
@@ -162,14 +224,9 @@ export function NoteEditor({ note, allNotes }: Props) {
             disabled={del.isPending}
             style={{ ...S.smallBtn, color: "#C45B4A", marginLeft: "auto" }}
           >
-            Delete
+            {del.isPending ? "Deleting…" : "Delete"}
           </button>
         </div>
-        {update.isError && (
-          <p style={{ color: "#C45B4A", fontSize: 11, marginTop: 4 }}>
-            {(update.error as Error)?.message || "Save failed"}
-          </p>
-        )}
       </div>
 
       {/* ── Right panel ── */}
@@ -178,7 +235,7 @@ export function NoteEditor({ note, allNotes }: Props) {
         padding: "14px 12px", overflow: "auto",
         borderLeft: `1px solid ${C.border}`,
       }}>
-        {/* Neighbors (outgoing) */}
+        {/* Neighbors */}
         <h4 style={S.panelH}>
           <LinkIcon /> Neighbors ({neighbors.data?.length ?? 0})
         </h4>
@@ -192,17 +249,19 @@ export function NoteEditor({ note, allNotes }: Props) {
             onClick={() => router.push(`/notes/${n.id}`)}
             style={{ ...S.edgeCard, cursor: "pointer" }}
           >
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{
+              fontSize: 12.5, fontWeight: 600, color: C.text,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
               {n.title || "Untitled"}
             </span>
           </div>
         ))}
 
-        {/* Backlinks (incoming) */}
+        {/* Backlinks */}
         <h4 style={{ ...S.panelH, marginTop: 14 }}>
           <BackIcon /> Backlinks
         </h4>
-        {/* We only have neighbors from depth-1 which mixes in/out; show a note about the API */}
         <p style={S.panelEmpty}>Link in from another note to see backlinks here.</p>
 
         {/* Suggestions */}
@@ -218,7 +277,10 @@ export function NoteEditor({ note, allNotes }: Props) {
               <div key={s.id} style={{ ...S.edgeCard, background: "#F5EEF9" }}>
                 <span
                   onClick={() => router.push(`/notes/${s.id}`)}
-                  style={{ fontSize: 12.5, fontWeight: 500, color: C.text, flex: 1, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  style={{
+                    fontSize: 12.5, fontWeight: 500, color: C.text, flex: 1,
+                    cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
                 >
                   {s.title || "Untitled"}
                 </span>
@@ -228,7 +290,11 @@ export function NoteEditor({ note, allNotes }: Props) {
                 <button
                   type="button"
                   onClick={() => createLink.mutate({ source: note.id, target: s.id, label: "REFERENCES" })}
-                  style={{ fontSize: 8, padding: "2px 7px", background: "#9B6BC4", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", flexShrink: 0 }}
+                  style={{
+                    fontSize: 8, padding: "2px 7px",
+                    background: "#9B6BC4", color: "#fff",
+                    border: "none", borderRadius: 4, cursor: "pointer", flexShrink: 0,
+                  }}
                 >
                   Link
                 </button>
