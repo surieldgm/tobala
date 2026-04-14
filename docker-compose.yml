@@ -1,0 +1,21 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile.pg
+    environment:
+      POSTGRES_DB: agave_test
+      POSTGRES_USER: agave
+      POSTGRES_PASSWORD: agave
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agave -d agave_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

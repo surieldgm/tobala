@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-agave"
+version = "0.1.0"
+description = "Django OGM unifying relational, graph (Apache AGE), and vector (pgvector) paradigms"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Suriel" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "django>=4.2",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.3.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+sentence-transformers = ["sentence-transformers>=2.0"]
+ollama = ["ollama>=0.1"]
+dev = [
+    "pytest>=7.0",
+    "pytest-django>=4.5",
+    "ruff>=0.4",
+    "mypy>=1.0",
+    "coverage>=7.0",
+    "django-stubs>=4.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/suriel/django-agave"
+Documentation = "https://github.com/suriel/django-agave/docs"
+Repository = "https://github.com/suriel/django-agave"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agave"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+plugins = ["mypy_django_plugin.main"]
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"
