@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/opt/django-agave:/app
+
+WORKDIR /app
+
+# System deps: build tools for psycopg's optional C build path + libpq headers
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY apps/backend/requirements.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
+
+# Agave is bind-mounted at /opt/django-agave and available via PYTHONPATH.
+# No pip install -e needed — live edits from the host repo are visible.
+
+EXPOSE 8000
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

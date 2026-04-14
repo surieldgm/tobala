@@ -38,3 +38,6 @@ yarn-error.log*
 
 # Docker
 .docker-volumes/
+
+# Claude Code local files (plans, memory, launch config, local settings)
+.claude/

@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-newsreader);
+  --font-mono: var(--font-dm-mono);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  background: #FBF6ED;
+  color: #3D3527;
+  font-family: var(--font-newsreader), Georgia, serif;
+}
+
+input, textarea, select, button { font-family: inherit; }
+
+/* Thin, warm scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D4C5A9; border-radius: 4px; }
+
+/* Remove default textarea resize handle */
+textarea { resize: none; }

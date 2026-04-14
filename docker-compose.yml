@@ -11,12 +11,55 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tobala} -d ${POSTGRES_DB:-tobala}"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: tobala-backend
+    working_dir: /app
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tobala}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tobala_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-tobala}
+      DB_HOST: db
+      DB_PORT: 5432
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+    volumes:
+      - ./apps/backend:/app
+      - ./packages/django-agave:/opt/django-agave
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: tobala-frontend
+    working_dir: /app
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    volumes:
+      - ./apps/frontend:/app
+      # Anonymous volume keeps container's node_modules separate from host,
+      # so the image's installed deps aren't shadowed by the bind mount.
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

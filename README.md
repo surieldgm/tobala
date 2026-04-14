@@ -33,7 +33,7 @@ make migrate       # apply Django + AGE migrations
 make backend-shell # open a shell in the backend container
 ```
 
-Frontend: http://localhost:3000 · Backend: http://localhost:8000
+Frontend: http://localhost:3000 · Backend: http://localhost:8000 · Postgres (host): `localhost:5433` (internal: `db:5432`)
 
 ## Common commands
 
