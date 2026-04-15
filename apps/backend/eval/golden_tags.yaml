@@ -1,0 +1,44 @@
+# Seed golden set for ``manage.py eval_tagging``.
+#
+# Each item is a hand-curated (body, tags) pair. The command runs the
+# tagging LLM against ``body`` and compares the returned tag set against
+# ``expected_tags`` using the Jaccard similarity — a single number per row.
+# It also tracks the count-drift (how far the model is from the 3-7 tag
+# target the system prompt asks for).
+#
+# These are text-only — we don't need a real Note row in the DB because
+# the tagger is pure text → list[tag] at heart.
+#
+# Seed with a handful, grow over time. You can regenerate by hand-tagging
+# a few of your own notes and copying their (title+body, tags) here.
+
+- id: gradient_descent_intro
+  body: |
+    Gradient descent is an iterative optimization method: compute the
+    gradient of the loss with respect to the parameters, then step in the
+    opposite direction by the learning rate. It converges to a local
+    minimum given a well-conditioned problem.
+  expected_tags:
+    - gradient-descent
+    - optimization
+    - machine-learning
+
+- id: zettelkasten_overview
+  body: |
+    The zettelkasten method builds a personal network of atomic notes,
+    each linked to the others by typed edges. Every new idea extends,
+    contradicts, or supports an older one — the network is the knowledge.
+  expected_tags:
+    - zettelkasten
+    - note-taking
+    - knowledge-management
+
+- id: transformer_attention
+  body: |
+    Self-attention lets every token in a sequence attend to every other
+    token — each produces a query, a key, and a value, and weights are
+    softmax-ed dot products of queries and keys.
+  expected_tags:
+    - transformer
+    - attention
+    - neural-networks

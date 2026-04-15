@@ -2,12 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useGraph } from "@/hooks/useGraph";
+import { useContexts } from "@/hooks/useContexts";
 import { GraphViewSVG } from "@/components/GraphViewSVG";
-import { CAT_META, EDGE_META, F, C } from "@/lib/design";
+import { getContextColors, EDGE_META, F, C } from "@/lib/design";
 
 export default function GraphPage() {
   const router = useRouter();
   const graph = useGraph();
+  const contexts = useContexts();
 
   return (
     <main style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, padding: "24px 32px", background: C.bg }}>
@@ -46,11 +48,14 @@ export default function GraphPage() {
             />
           </div>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-            {(Object.entries(CAT_META) as [string, typeof CAT_META[keyof typeof CAT_META]][]).map(([k, v]) => (
-              <span key={k} style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: F.mono, fontSize: 10, color: C.text3 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: v.dot }} /> {v.label}
-              </span>
-            ))}
+            {(contexts.data ?? []).map((c) => {
+              const col = getContextColors(c);
+              return (
+                <span key={c.id} style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: F.mono, fontSize: 10, color: C.text3 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: col.dot }} /> {c.name}
+                </span>
+              );
+            })}
             <span style={{ color: "#D4C5A9" }}>|</span>
             {(Object.entries(EDGE_META) as [string, typeof EDGE_META[keyof typeof EDGE_META]][]).map(([k, v]) => (
               <span key={k} style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F.mono, fontSize: 10, color: v.color }}>

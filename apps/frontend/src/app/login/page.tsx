@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useLogin } from "@/hooks/useAuth";
-import { F, C } from "@/lib/design";
+import { F, C, TAGLINE } from "@/lib/design";
 
 const EyeIcon = () => (
   <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -32,8 +33,27 @@ export default function LoginPage() {
     }}>
       <div style={{ width: 350, padding: "32px 28px", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ textAlign: "center", marginBottom: 4 }}>
-          <div style={{ fontSize: 44, marginBottom: 2 }}>🌵</div>
+          <div style={{ marginBottom: 2, display: "flex", justifyContent: "center" }}>
+            <Image
+              src="/tobala.jpeg"
+              width={112}
+              height={112}
+              alt="Tobalá mascot"
+              priority
+              style={{
+                width: 112,
+                height: 112,
+                borderRadius: 18,
+                objectFit: "cover",
+                objectPosition: "center 22%",
+                mixBlendMode: "multiply",
+              }}
+            />
+          </div>
           <span style={{ fontSize: 26, fontWeight: 600, color: C.text2, fontStyle: "italic" }}>Tobalá</span>
+          <p style={{ fontFamily: F.serif, fontStyle: "italic", fontSize: 13, color: C.text3, opacity: .85, marginTop: 4 }}>
+            {TAGLINE}
+          </p>
           <p style={{ fontFamily: F.mono, fontSize: 8, color: C.text3, opacity: .5, marginTop: 3, letterSpacing: .5 }}>
             ZETTELKASTEN · POWERED BY AGAVE
           </p>

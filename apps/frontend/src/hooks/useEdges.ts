@@ -6,13 +6,32 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { EdgeLabel, Note, NoteLink, Suggestion } from "@/lib/types";
+import type {
+  EdgeLabel,
+  Note,
+  NoteLink,
+  ProposalSummary,
+  Suggestion,
+} from "@/lib/types";
 
 export function useNeighbors(noteId: number | null, depth: number = 1) {
   return useQuery<Note[]>({
     queryKey: ["notes", noteId, "neighbors", depth],
     enabled: noteId != null,
     queryFn: () => api.get<Note[]>(`/notes/${noteId}/neighbors/?depth=${depth}`),
+  });
+}
+
+/**
+ * Per-note edges (excludes rejected). The editor splits these into
+ * Confirmed + Proposed sections; each row carries the counterparty title so
+ * we don't need a second query per link.
+ */
+export function useNoteLinks(noteId: number | null) {
+  return useQuery<ProposalSummary[]>({
+    queryKey: ["notes", noteId, "links"],
+    enabled: noteId != null,
+    queryFn: () => api.get<ProposalSummary[]>(`/notes/${noteId}/links/`),
   });
 }
 
@@ -36,6 +55,8 @@ export function useCreateLink() {
     }) => api.post<NoteLink>("/links/", payload),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["notes", vars.source, "neighbors"] });
+      qc.invalidateQueries({ queryKey: ["notes", vars.source, "links"] });
+      qc.invalidateQueries({ queryKey: ["notes", vars.target, "links"] });
       qc.invalidateQueries({ queryKey: ["notes", vars.source, "suggestions"] });
       qc.invalidateQueries({ queryKey: ["graph"] });
     },
@@ -50,5 +71,31 @@ export function useDeleteLink() {
       qc.invalidateQueries({ queryKey: ["notes"] });
       qc.invalidateQueries({ queryKey: ["graph"] });
     },
+  });
+}
+
+/** Shared invalidation after accept/reject — keeps neighbors + graph + inbox
+ * and per-edge suggestions panels in sync. */
+function invalidateLinkViews(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["notes"] });
+  qc.invalidateQueries({ queryKey: ["graph"] });
+  qc.invalidateQueries({ queryKey: ["proposals"] });
+}
+
+export function useAcceptLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.post<NoteLink>(`/links/${id}/accept/`, {}),
+    onSuccess: () => invalidateLinkViews(qc),
+  });
+}
+
+export function useRejectLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.post<NoteLink>(`/links/${id}/reject/`, {}),
+    onSuccess: () => invalidateLinkViews(qc),
   });
 }

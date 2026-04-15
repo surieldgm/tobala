@@ -1,0 +1,149 @@
+# Seeded notes for every new user.
+#
+# Loaded by `notes.onboarding.seed_user_onboarding` on User post_save. The
+# 10 notes + 14 typed links are meant to:
+#   (a) explain what Tobalá is from inside Tobalá, and
+#   (b) give the new user a non-empty graph so the UI doesn't feel hollow.
+#
+# Each note becomes a `Note` row + an AGE vertex. Each link becomes a
+# `NoteLink(status="confirmed", created_by="user")` — i.e. they show up as
+# solid edges, not proposals. Embedding / tagging still runs (via the
+# existing post_save signal on Note), so the seeded notes become first-class
+# retrieval targets for `/ask`.
+
+context:
+  name: "Welcome to Tobalá"
+  color: "ochre"
+  description: "Seeded notes that explain how this system works, linked to each other."
+
+notes:
+  - key: agave-origin
+    title: "agave = AGE + VE"
+    body: |
+      `agave` is a compound name: **AGE** (Apache AGE, the graph extension for PostgreSQL) + **VE** (vectors, via `pgvector`).
+
+      The idea is for a single Postgres instance to be, at once:
+      - a relational database,
+      - a graph engine (vertices + typed edges),
+      - and a vector index (HNSW for similarity search).
+
+      A single row can be a SQL row, a vertex in the graph, and an embedding — all without leaving Postgres.
+
+  - key: agave-tobala
+    title: "Why Tobalá runs on agave"
+    body: |
+      The `agave` package and Tobalá share an author. Tobalá was born as a *dogfood*: a real app that exercises every feature of agave in production.
+
+      Every Note is, at the same time:
+      - a SQL row (title, body, context),
+      - a vertex in the AGE graph,
+      - a 1536-dimensional vector in the `embedding` column.
+
+      Every NoteLink is a typed edge. If agave breaks something, Tobalá notices first. If Tobalá needs something, agave gets it before anyone else.
+
+  - key: tobala-species
+    title: "Tobalá — the agave behind the name"
+    body: |
+      Tobalá (*Agave potatorum*) is a wild agave native to Oaxaca, Mexico. Small, slow-growing, found on rocky hillsides — prized for the complex, earthy mezcal distilled from it.
+
+      The project inherits the name on purpose:
+      - The PostgreSQL substrate is `agave` (AGE + VE) — the whole genus.
+      - The app sits on top: one variety chosen from that genus.
+      - Wild, dense, slow to mature — like a good zettelkasten.
+
+      The mascot in the sidebar is a stylised Tobalá.
+
+  - key: zettelkasten
+    title: "Zettelkasten — the thinking frame"
+    body: |
+      Zettelkasten (*slip-box*) is Niklas Luhmann's method: **atomic** notes — each expressing a single idea — connected with **typed links**.
+
+      The value isn't in the individual note but in the graph that emerges over time. Ideas crystallise as structure.
+
+      Tobalá is a digital Zettelkasten: atomic notes, labelled links (`references`, `supports`, `contradicts`, `extends`, `inspires`), and the graph is a first-class citizen — not a secondary view.
+
+  - key: tobala-ux
+    title: "The UX goal — write first, organise never"
+    body: |
+      Traditional PKM tools (Obsidian, Roam, Logseq) ask the user to **organise**: pick folders, write `[[links]]`, maintain tags. Tobalá inverts that burden.
+
+      You write. The LLM pipeline does the rest:
+      1. Embeds the note.
+      2. Infers tags.
+      3. Proposes candidate links.
+
+      The user accepts or rejects proposals from a unified inbox. Zero organisation tax, zero blank-page paralysis.
+
+  - key: graph-rag
+    title: "Graph RAG — retrieval with structure"
+    body: |
+      Classic RAG: top-k by vector similarity, chunks dropped into the prompt. The connective tissue between ideas is lost.
+
+      Graph RAG: after ranking by similarity, walk the graph around the top hits to pull in notes that aren't semantically close but *are* structurally relevant — for example, a note that **contradicts** or **extends** the one the vector found.
+
+      The LLM answers with citations that anchor the response in your graph, not in a soup of nearest neighbours.
+
+  - key: embedding
+    title: "Embedding — text as geometry"
+    body: |
+      An embedding is a high-dimensional vector (1536 numbers, for OpenAI's `text-embedding-3-small`) that positions a piece of text in a **space of meaning**.
+
+      Two notes on similar topics end up close in that space, even if they share no vocabulary.
+
+      Tobalá embeds every note and stores the vector in the `embedding` column. Cosine distance between vectors powers every retrieval path: the "similar notes" panel, the link proposer, and `/ask`'s retrieval stage.
+
+  - key: llm-models
+    title: "One LLM per task"
+    body: |
+      Tobalá doesn't use a single model. Each task gets its own, balancing cost and quality:
+
+      - **Embedding** — `text-embedding-3-small` (cheap, fast, 1536-d).
+      - **Tagging** — `gpt-4o-mini` with structured output, 3–7 tags per note.
+      - **Link proposal** — `gpt-4o-mini`, classifies the edge type between pairs.
+      - **Retrieval (/ask)** — `gpt-4o`; synthesis quality matters here.
+
+      Every call is logged in `LLMInvocation`. The admin shows cost and latency per task, with p50 / p95.
+
+  - key: django-agave
+    title: "django-agave — the substrate"
+    body: |
+      `django-agave` is the Python package that makes all of the above possible:
+
+      1. Hooks into model classes: a `GraphModel` lives both as a row and as a vertex in AGE; an `Edge` as a typed edge.
+      2. Provides `VectorField` and a `VectorManager` with `.with_distance()` for ANN queries over `pgvector`'s HNSW / IVFFLAT indexes.
+      3. Ships migration helpers that create AGE graphs and vector indexes without friction.
+
+      Tobalá imports it like any Django app. The magic happens on `migrate` and on every `save()`.
+
+  - key: node-render
+    title: "How graph nodes render"
+    body: |
+      The `/notes?view=graph` view and the `/graph` page fetch a `{nodes, edges}` JSON from the `/api/graph/` endpoint, and hand it to the `GraphViewSVG` component.
+
+      The layout is a force simulation in pure SVG (no `canvas`):
+      - Each node is coloured by its `context` (the dot you see in the sidebar).
+      - Size depends on degree — how many edges go in or out.
+      - Edges inherit the colour of their type (REFERENCES, SUPPORTS, CONTRADICTS, EXTENDS, INSPIRES).
+
+      Hover shows the title; click navigates to the editor.
+
+# ─────────────────────────────────────────────────────────────
+# Typed edges. Format: [source_key, target_key, label].
+# Created as status="confirmed", created_by="user" so they render
+# as solid edges from the first login (not as proposals).
+# ─────────────────────────────────────────────────────────────
+links:
+  - [agave-origin, agave-tobala, REFERENCES]
+  - [agave-origin, django-agave, EXTENDS]
+  - [agave-origin, embedding, SUPPORTS]
+  - [agave-tobala, tobala-species, REFERENCES]
+  - [tobala-species, agave-origin, REFERENCES]
+  - [agave-tobala, zettelkasten, INSPIRES]
+  - [zettelkasten, tobala-ux, SUPPORTS]
+  - [tobala-ux, llm-models, REFERENCES]
+  - [embedding, graph-rag, SUPPORTS]
+  - [embedding, llm-models, REFERENCES]
+  - [graph-rag, llm-models, REFERENCES]
+  - [graph-rag, node-render, EXTENDS]
+  - [django-agave, node-render, SUPPORTS]
+  - [zettelkasten, graph-rag, INSPIRES]
