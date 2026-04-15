@@ -1,12 +1,14 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useClientSearchParams } from "@/hooks/useClientSearchParams";
 import { useCreateNote, useNotes } from "@/hooks/useNotes";
+import { useContexts } from "@/hooks/useContexts";
 import { useGraph } from "@/hooks/useGraph";
-import { CAT_META, EDGE_META, F, C } from "@/lib/design";
+import { getContextColors, EDGE_META, F, C, S } from "@/lib/design";
 import { GraphViewSVG } from "@/components/GraphViewSVG";
-import type { Category } from "@/lib/types";
 
 const PlusIcon = () => (
   <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -44,34 +46,24 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function BubbleTea() {
-  return (
-    <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
-      <rect x="25" y="22" width="50" height="60" rx="10" fill="#E8C88A" stroke="#C4A265" strokeWidth="1.5"/>
-      <rect x="30" y="27" width="40" height="46" rx="7" fill="#F5E6C8"/>
-      <circle cx="38" cy="46" r="2.5" fill="#8B7355"/>
-      <circle cx="48" cy="52" r="2.5" fill="#8B7355"/>
-      <circle cx="58" cy="46" r="2.5" fill="#8B7355"/>
-      <circle cx="43" cy="58" r="2.5" fill="#8B7355"/>
-      <path d="M41 37c0 0 3-2.5 6 0s6 0 6 0" stroke="#8B7355" strokeWidth="1.2" strokeLinecap="round"/>
-      <ellipse cx="44" cy="39.5" rx="1.2" ry="1.6" fill="#8B7355"/>
-      <ellipse cx="55" cy="39.5" rx="1.2" ry="1.6" fill="#8B7355"/>
-      <rect x="47" y="8" width="3" height="18" rx="1.5" fill="#8B7355"/>
-      <path d="M43 16Q50 12 57 16" stroke="#8B7355" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-    </svg>
-  );
-}
 
 function NotesDashboard() {
+  const [hoverView, setHoverView] = useState<"cards" | "graph" | null>(null);
   const router = useRouter();
-  const sp = useSearchParams();
-  const filterCat = (sp.get("cat") ?? "all") as "all" | Category;
+  const sp = useClientSearchParams();
+  const filterCtx = sp.get("ctx") ?? "";
+  const filterTag = sp.get("tag") ?? "";
   const query = sp.get("q") ?? "";
   const view = sp.get("view") ?? "cards";
 
-  const notes = useNotes({ category: filterCat !== "all" ? filterCat : undefined, q: query || undefined });
+  const notes = useNotes({
+    ctx: filterCtx || undefined,
+    tag: filterTag || undefined,
+    q: query || undefined,
+  });
   const graph = useGraph();
   const createNote = useCreateNote();
+  const contexts = useContexts();
 
   const sorted = useMemo(
     () => [...(notes.data ?? [])].sort((a, b) => new Date(b.edited).getTime() - new Date(a.edited).getTime()),
@@ -88,35 +80,57 @@ function NotesDashboard() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Topbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ display: "flex", gap: 2, background: C.muted, borderRadius: 6, padding: 2 }}>
-          {(["cards", "graph"] as const).map(k => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setView(k)}
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "5px 12px", borderRadius: 5, border: "none",
-                background: view === k ? C.bg : "transparent",
-                fontFamily: F.serif, fontSize: 12.5,
-                color: view === k ? C.text2 : C.text3,
-                cursor: "pointer", fontWeight: view === k ? 600 : 400,
-                boxShadow: view === k ? "0 1px 2px rgba(0,0,0,.06)" : "none",
-              }}
-            >
-              {k === "cards" ? <CardsIcon /> : <GraphIcon />}
-              {k === "cards" ? "Cards" : "Graph"}
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: 6, background: C.muted, borderRadius: 999, padding: 4 }}>
+          {(["cards", "graph"] as const).map(k => {
+            const active = view === k;
+            const hovered = hoverView === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                aria-label={k === "cards" ? "Cards view" : "Graph view"}
+                title={k === "cards" ? "Cards" : "Graph"}
+                onClick={() => setView(k)}
+                onMouseEnter={() => setHoverView(k)}
+                onMouseLeave={() => setHoverView(null)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                  border: active ? `1px solid ${C.border}` : "1px solid transparent",
+                  background: active
+                    ? C.bg
+                    : hovered
+                      ? "rgba(61, 53, 39, 0.07)"
+                      : "transparent",
+                  color: active ? C.text2 : C.text3,
+                  cursor: "pointer",
+                  boxShadow: active ? "0 1px 3px rgba(0,0,0,.08)" : "none",
+                  transition: "background-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, border-color 0.18s ease",
+                }}
+              >
+                {k === "cards" ? <CardsIcon /> : <GraphIcon />}
+              </button>
+            );
+          })}
         </div>
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            // If filtering by a context, pre-assign new note to that context.
+            const ctxId =
+              filterCtx && filterCtx !== "none"
+                ? Number(filterCtx)
+                : null;
             createNote.mutate(
-              { title: "", body: "", category: "random" },
+              { title: "", body: "", context_id: ctxId },
               { onSuccess: n => router.push(`/notes/${n.id}`) }
-            )
-          }
+            );
+          }}
           disabled={createNote.isPending}
           style={{
             display: "flex", alignItems: "center", gap: 5,
@@ -142,11 +156,14 @@ function NotesDashboard() {
                 activeId={null}
               />
               <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-                {(Object.entries(CAT_META) as [string, typeof CAT_META[keyof typeof CAT_META]][]).map(([k, v]) => (
-                  <span key={k} style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: F.mono, fontSize: 10, color: C.text3 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: v.dot }} /> {v.label}
-                  </span>
-                ))}
+                {(contexts.data ?? []).map((c) => {
+                  const col = getContextColors(c);
+                  return (
+                    <span key={c.id} style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: F.mono, fontSize: 10, color: C.text3 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: col.dot }} /> {c.name}
+                    </span>
+                  );
+                })}
                 <span style={{ color: "#D4C5A9" }}>|</span>
                 {(Object.entries(EDGE_META) as [string, typeof EDGE_META[keyof typeof EDGE_META]][]).map(([k, v]) => (
                   <span key={k} style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F.mono, fontSize: 10, color: v.color }}>
@@ -160,8 +177,15 @@ function NotesDashboard() {
           )}
         </div>
       ) : sorted.length === 0 && !notes.isLoading ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <BubbleTea />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <Image
+            src="/michi.png"
+            width={140}
+            height={105}
+            alt="Sleeping cat waiting for notes"
+            style={{ opacity: 0.88, userSelect: "none" }}
+            priority
+          />
           <p style={{ fontFamily: F.serif, fontSize: 15, color: C.text3, fontStyle: "italic" }}>
             I&apos;m just here waiting for your charming notes…
           </p>
@@ -177,18 +201,19 @@ function NotesDashboard() {
             <p style={{ gridColumn: "1/-1", fontSize: 13, color: C.text3, fontStyle: "italic" }}>Loading…</p>
           )}
           {sorted.map(n => {
-            const cat = CAT_META[n.category as keyof typeof CAT_META] ?? CAT_META.random;
+            const colors = getContextColors(n.context);
             const deg = graph.data
               ? graph.data.edges.filter(e => e.source === n.id || e.target === n.id).length
               : 0;
+            const visibleTags = n.tags.slice(0, 3);
             return (
               <div
                 key={n.id}
                 onClick={() => router.push(`/notes/${n.id}`)}
                 style={{
                   padding: 16, borderRadius: 8,
-                  border: `1.5px solid ${cat.border}`,
-                  background: cat.bg, cursor: "pointer",
+                  border: `1.5px solid ${colors.border}`,
+                  background: colors.bg, cursor: "pointer",
                   display: "flex", flexDirection: "column", gap: 5,
                   minHeight: 130,
                   transition: "transform .15s",
@@ -198,8 +223,9 @@ function NotesDashboard() {
                   <span style={{ fontFamily: F.mono, fontSize: 10, color: C.text3, opacity: .65 }}>
                     {fmtDate(n.edited)}
                   </span>
-                  <span style={{ fontFamily: F.mono, fontSize: 9, color: C.text3, opacity: .5 }}>
-                    {cat.label}
+                  <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: F.mono, fontSize: 9, color: C.text3, opacity: .6 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: colors.dot }} />
+                    {n.context?.name ?? "Unsorted"}
                   </span>
                 </div>
                 <h3 style={{ fontFamily: F.serif, fontSize: 15.5, fontWeight: 600, color: C.text, margin: 0, lineHeight: 1.3 }}>
@@ -208,6 +234,27 @@ function NotesDashboard() {
                 <p style={{ fontSize: 12.5, lineHeight: 1.5, color: C.text2, opacity: .75, flex: 1, overflow: "hidden" }}>
                   {n.body.slice(0, 120)}{n.body.length > 120 ? "…" : ""}
                 </p>
+                {visibleTags.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {visibleTags.map((t) => (
+                      <span
+                        key={t.id}
+                        style={{
+                          ...S.tagChip,
+                          cursor: "default",
+                          ...(t.source === "system" ? S.tagChipSystem : {}),
+                        }}
+                      >
+                        {t.name}
+                      </span>
+                    ))}
+                    {n.tags.length > visibleTags.length && (
+                      <span style={{ fontFamily: F.mono, fontSize: 10, color: C.text3, opacity: .6 }}>
+                        +{n.tags.length - visibleTags.length}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {deg > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F.mono, fontSize: 9.5, color: C.text3 }}>
                     <LinkIcon /> {deg}

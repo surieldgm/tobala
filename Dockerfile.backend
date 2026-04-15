@@ -22,4 +22,6 @@ RUN pip install -r /tmp/requirements.txt
 # No pip install -e needed — live edits from the host repo are visible.
 
 EXPOSE 8000
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Daphne is the ASGI server for Django Channels (WebSockets + HTTP in one process).
+# docker-compose's `worker` service overrides this CMD to run Celery instead.
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "tobala_project.asgi:application"]

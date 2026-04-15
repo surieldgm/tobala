@@ -1,0 +1,4 @@
+id,question,expected,returned,recall,latency_ms,error
+gradient_descent_basics,What is gradient descent and how does it find minima?,1|2,,0.0,1902,
+transformer_attention,How does self-attention work in transformer models?,3,,0.0,3302,
+zettelkasten_workflow,What's the zettelkasten approach to taking notes?,4|5,,0.0,518,

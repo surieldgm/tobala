@@ -1,0 +1,4 @@
+id,expected,returned,jaccard,count_drift,error
+gradient_descent_intro,gradient-descent|machine-learning|optimization,gradient-descent|local-minimum|loss-function|machine-learning|optimization,0.6,0,
+zettelkasten_overview,knowledge-management|note-taking|zettelkasten,atomic-notes|idea-development|knowledge-network|linked-notes|zettelkasten-method,0.0,0,
+transformer_attention,attention|neural-networks|transformer,machine-learning|natural-language-processing|self-attention|transformers,0.0,0,

@@ -12,6 +12,8 @@ ALLOWED_HOSTS = os.environ.get(
 ).split(",")
 
 INSTALLED_APPS = [
+    # Daphne must come first so its runserver override wins (Channels docs).
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -22,6 +24,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
+    "channels",
     "agave",
     # Local
     "accounts",
@@ -57,6 +60,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "tobala_project.wsgi.application"
+ASGI_APPLICATION = "tobala_project.asgi.application"
 
 DATABASES = {
     "default": {
@@ -89,10 +93,62 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # --- django-agave ---------------------------------------------------------
 AGAVE = {
     "DEFAULT_GRAPH_NAME": "tobala",
-    "VECTOR_DIMENSIONS": 384,
+    # Bumped from 384 → 1536 (OpenAI text-embedding-3-small native dim) in
+    # migration 0003_embedding_1536. Existing embeddings are nulled and must
+    # be regenerated via the async pipeline (or `manage.py reembed_all`).
+    "VECTOR_DIMENSIONS": 1536,
     "VECTOR_INDEX_TYPE": "hnsw",
     "AUTO_CREATE_GRAPH": False,  # created explicitly via CreateGraph migration op
 }
+
+# --- Celery (async pipeline) ---------------------------------------------
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = TIME_ZONE
+# When True, tasks run inline (no worker needed). Handy for tests + single-user dev
+# runs that don't want the worker container up. Default False in prod.
+CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_EAGER", "0") == "1"
+CELERY_TASK_EAGER_PROPAGATES = True
+
+# --- Channels (WebSockets) ------------------------------------------------
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {"hosts": [REDIS_URL]},
+    }
+}
+
+# --- LLM pipeline (R2) ----------------------------------------------------
+# Single config block the providers/* modules read from. Swap models per-task
+# via env without touching code.
+TOBALA_LLM = {
+    "embedding_provider": os.environ.get("EMBEDDING_PROVIDER", "openai"),
+    "embedding_model": os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small"),
+    "embedding_dim": 1536,
+    "tagging_provider": os.environ.get("TAGGING_PROVIDER", "openai"),
+    "tagging_model": os.environ.get("TAGGING_MODEL", "gpt-4o-mini"),
+    "linking_provider": os.environ.get("LINKING_PROVIDER", "openai"),
+    "linking_model": os.environ.get("LINKING_MODEL", "gpt-4o-mini"),
+    "retrieval_provider": os.environ.get("RETRIEVAL_PROVIDER", "openai"),
+    "retrieval_model": os.environ.get("RETRIEVAL_MODEL", "gpt-4o"),
+    # How many semantically-close candidates to consider for auto-linking.
+    "top_k_links": 5,
+    # Min LLM confidence to surface an auto-linking proposal (below → dropped).
+    "linking_confidence_threshold": 0.5,
+    # How many anchor notes to ground retrieval against.
+    "top_k_retrieval": 8,
+    # Tag count bounds the tagging LLM must respect.
+    "tag_min": 3,
+    "tag_max": 7,
+}
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # --- DRF ------------------------------------------------------------------
 REST_FRAMEWORK = {

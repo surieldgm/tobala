@@ -1,0 +1,31 @@
+# Seed golden set for ``manage.py eval_retrieval``.
+#
+# Each item pairs a question a user might ask Ask Tobalá with the ids of
+# the Notes that *should* be among the top-K anchors the retrieval pipeline
+# returns. ``expected_note_ids`` are judged against ``cited_note_ids`` from
+# the LLM response; recall@K is the headline metric.
+#
+# The ``owner`` field is the username whose notes the retriever runs over
+# (a single-owner deploy can leave it blank — the command will fall back to
+# the first user in the DB).
+#
+# Notes on seeding: these ids are placeholders. Replace them with real ids
+# from your own Zettelkasten before running. The command will skip items
+# whose expected ids don't exist rather than crashing.
+#
+# Add more rows freely — the harness is happy with 1 or 100.
+
+- id: gradient_descent_basics
+  owner: ""
+  question: "What is gradient descent and how does it find minima?"
+  expected_note_ids: [1, 2]
+
+- id: transformer_attention
+  owner: ""
+  question: "How does self-attention work in transformer models?"
+  expected_note_ids: [3]
+
+- id: zettelkasten_workflow
+  owner: ""
+  question: "What's the zettelkasten approach to taking notes?"
+  expected_note_ids: [4, 5]

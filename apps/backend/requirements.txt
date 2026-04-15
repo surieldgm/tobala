@@ -5,3 +5,23 @@ django-cors-headers>=4.3
 psycopg[binary]>=3.1
 pgvector>=0.3
 python-dotenv>=1.0
+
+# Async pipeline (Celery + Redis)
+celery[redis]>=5.4
+redis>=5.0
+
+# Real-time (Django Channels over ASGI/Daphne)
+channels>=4.1
+channels-redis>=4.2
+daphne>=4.1
+
+# LLM providers
+openai>=1.50
+anthropic>=0.39
+tiktoken>=0.7
+
+# Eval harness (golden-set fixtures in YAML)
+PyYAML>=6.0
+
+# Dev
+django-extensions>=3.2

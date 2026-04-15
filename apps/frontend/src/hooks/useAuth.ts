@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, tokens } from "@/lib/api";
+import { ws } from "@/lib/ws";
 import type { AuthUser } from "@/lib/types";
 
 /** Reads tokens on mount to avoid Next.js hydration mismatch. */
@@ -38,6 +39,9 @@ export function useLogin() {
       }),
     onSuccess: (data) => {
       tokens.set(data.access, data.refresh);
+      // The WS socket was opened (if at all) with the anonymous user's
+      // absent token — reconnect now that we have a real access token.
+      ws.reauth();
       qc.invalidateQueries({ queryKey: ["me"] });
       router.push("/notes");
     },
@@ -62,6 +66,7 @@ export function useSignup() {
       tokens.set(loginRes.access, loginRes.refresh);
     },
     onSuccess: () => {
+      ws.reauth();
       qc.invalidateQueries({ queryKey: ["me"] });
       router.push("/notes");
     },
@@ -73,6 +78,7 @@ export function useLogout() {
   const router = useRouter();
   return () => {
     tokens.clear();
+    ws.reauth();
     qc.clear();
     router.push("/login");
   };
